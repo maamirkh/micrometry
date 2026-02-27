@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Micrometry Simulation — 3D Lab Simulator</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#0a0e17;--panel:#111827;--card:#1a2234;--accent:#00e5ff;--accent2:#7c4dff;
+--accent3:#00e676;--warn:#ff9100;--err:#ff1744;--text:#e0e6f0;--dim:#6b7a99;
+--radius:12px;--glow:0 0 20px rgba(0,229,255,.15);
+}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text)}
+#app{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr auto;height:100vh;gap:6px;padding:6px}
+#scene-container{grid-column:1;grid-row:1;background:#c8d4e2;border-radius:var(--radius);overflow:hidden;position:relative;min-height:200px}
+#eyepiece-panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:6px;min-height:200px}
+#eyepiece-wrapper{flex:1;background:var(--panel);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+#eyepiece-canvas{border-radius:50%;border:3px solid var(--accent);box-shadow:var(--glow)}
+#info-bar{background:var(--card);border-radius:var(--radius);padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+#controls{grid-column:1/3;grid-row:2;background:var(--panel);border-radius:var(--radius);padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;overflow-y:auto;max-height:38vh}
+.badge{background:var(--card);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:4px 10px;font-size:.72rem;white-space:nowrap}
+.badge b{color:var(--accent);margin-right:4px}
+button,.btn{background:linear-gradient(135deg,var(--accent2),var(--accent));color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+button:hover,.btn:hover{transform:translateY(-1px);box-shadow:0 4px 15px rgba(0,229,255,.3)}
+button:active{transform:scale(.97)}
+button.secondary{background:var(--card);border:1px solid var(--dim)}
+select,input[type=number]{background:var(--card);color:var(--text);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:6px 10px;font-size:.78rem;outline:none}
+select:focus,input:focus{border-color:var(--accent)}
+label{font-size:.72rem;color:var(--dim);display:flex;flex-direction:column;gap:3px}
+.ctrl-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;background:var(--card);height:6px;border-radius:3px;outline:none;flex:1;min-width:80px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer}
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
+#modal-overlay.active{display:flex}
+#modal{background:var(--panel);border:1px solid rgba(0,229,255,.15);border-radius:16px;padding:24px;max-width:560px;width:92%;max-height:80vh;overflow-y:auto}
+#modal h2{color:var(--accent);margin-bottom:12px;font-size:1.1rem}
+#modal pre{background:var(--bg);padding:12px;border-radius:8px;font-size:.72rem;white-space:pre-wrap;max-height:50vh;overflow-y:auto;line-height:1.5}
+.toast{position:fixed;top:20px;right:20px;background:var(--card);border:1px solid var(--accent);border-radius:10px;padding:10px 18px;font-size:.8rem;z-index:999;animation:slideIn .3s ease,fadeOut .4s ease 2.6s forwards}
+@keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fadeOut{to{opacity:0;transform:translateY(-10px)}}
+.meter{height:6px;background:var(--card);border-radius:3px;overflow:hidden;flex:1;min-width:60px}
+.meter-fill{height:100%;border-radius:3px;transition:width .4s ease}
+#timer-bar{height:4px;background:var(--accent3);border-radius:2px;transition:width .1s linear}
+.sep{width:1px;height:24px;background:rgba(255,255,255,.08);flex-shrink:0}
+#top-header{position:fixed;top:0;left:0;right:0;z-index:20;background:linear-gradient(135deg,rgba(10,14,23,.95),rgba(30,20,60,.92));backdrop-filter:blur(12px);border-bottom:1px solid rgba(0,229,255,.15);padding:8px 20px;display:flex;align-items:center;justify-content:center;gap:14px;text-align:center}
+#top-header h1{font-size:1.1rem;background:linear-gradient(90deg,var(--accent),var(--accent2),var(--accent3));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;animation:shimmer 3s linear infinite}
+@keyframes shimmer{to{background-position:200% center}}
+#top-header .subtitle{font-size:.65rem;color:var(--dim);letter-spacing:.5px}
+#title-badge{display:none}
+.guide-tip{background:rgba(0,229,255,.08);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:6px 10px;font-size:.7rem;color:var(--dim);line-height:1.4;max-width:420px}
+@media(max-width:900px){
+#app{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}
+#scene-container{grid-column:1;grid-row:1;min-height:180px;max-height:30vh}
+#eyepiece-panel{grid-column:1;grid-row:2}
+#controls{grid-column:1;grid-row:3;max-height:45vh}
+}
+@media(max-width:500px){
+#controls{padding:6px;gap:5px}
+button,.btn{padding:5px 10px;font-size:.7rem}
+.badge{font-size:.65rem;padding:3px 7px}
+}
+</style>
+</head>
+<body>
+<div id="top-header">
+  <h1>Micrometry Simulation</h1>
+  <span class="subtitle">3D Interactive Lab Simulator</span>
+</div>
+<div id="app" style="padding-top:40px">
+  <div id="scene-container">
+  </div>
+  <div id="eyepiece-panel">
+    <div id="eyepiece-wrapper">
+      <canvas id="eyepiece-canvas"></canvas>
+    </div>
+    <div id="info-bar">
+      <span class="badge"><b>MAG</b><span id="mag-label">10×</span></span>
+      <span class="badge"><b>CAL</b><span id="cal-label">—</span></span>
+      <span class="badge"><b>OBJ</b><span id="obj-label">None</span></span>
+      <span class="badge"><b>MODE</b><span id="mode-label">Calibration</span></span>
+      <span class="badge"><b>SCORE</b><span id="score-label">—</span></span>
+      <div id="timer-wrap" style="display:none;flex:1;min-width:80px"><div style="font-size:.6rem;color:var(--dim)">TIME</div><div class="meter"><div id="timer-bar"></div></div></div>
+    </div>
+  </div>
+  <div id="controls"></div>
+</div>
+<div id="modal-overlay"><div id="modal"></div></div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import*as THREE from'three';
+import{OrbitControls}from'three/addons/controls/OrbitControls.js';
+
+/* ─── CONSTANTS ─── */
+const OBJECTS=[
+  {name:'Onion Cell',min:250,max:400,difficulty:1,color:0xb9f6ca,color2:0x69f0ae,shape:'ellipse'},
+  {name:'Human Cheek Cell',min:50,max:70,difficulty:2,color:0xf8bbd0,color2:0xf48fb1,shape:'round'},
+  {name:'Bacterial Rod',min:2,max:5,difficulty:4,color:0x80d8ff,color2:0x40c4ff,shape:'rod'},
+  {name:'Textile Fiber',min:80,max:150,difficulty:2,color:0xffe082,color2:0xffd54f,shape:'fiber'},
+  {name:'Salt Crystal',min:100,max:300,difficulty:1,color:0xe0e0e0,color2:0xffffff,shape:'crystal'},
+  {name:'Pollen Grain',min:20,max:100,difficulty:3,color:0xfff176,color2:0xffee58,shape:'spiky'}
+];
+const MAGNIFICATIONS=[10,40,100];
+
+const S={
+  mode:'calibrate',magIdx:0,calibrations:{},selectedObj:0,trueSize:0,
+  userDivisions:0,coarseFocus:50,fineFocus:50,focusQuality:1,results:[],
+  testQueue:[],testIdx:0,testTimer:0,testRunning:false,guidedMode:true,
+  showSolution:false,score:0,totalTests:0,objectiveAngle:0,targetAngle:0,
+  measureError:0
+};
+
+const lerp=(a,b,t)=>a+(b-a)*t;
+const rand=(a,b)=>Math.random()*(b-a)+a;
+const mag=()=>MAGNIFICATIONS[S.magIdx];
+const $=s=>document.querySelector(s);
+
+function toast(msg){const d=document.createElement('div');d.className='toast';d.textContent=msg;document.body.appendChild(d);setTimeout(()=>d.remove(),3200)}
+function showModal(html){$('#modal').innerHTML=html;$('#modal-overlay').classList.add('active')}
+function hideModal(){$('#modal-overlay').classList.remove('active')}
+
+/* ═══════════════════════════════════════════════
+   THREE.JS SCENE — BRIGHT LAB ENVIRONMENT
+   ═══════════════════════════════════════════════ */
+const container=$('#scene-container');
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.5;
+container.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0xe8e0d6);
+scene.fog=new THREE.Fog(0xe8e0d6,20,55);
+
+const camera=new THREE.PerspectiveCamera(38,1,.1,100);
+camera.position.set(4.5,4.5,6);
+
+const orbit=new OrbitControls(camera,renderer.domElement);
+orbit.enableDamping=true;orbit.dampingFactor=.08;
+orbit.minDistance=3;orbit.maxDistance=16;
+orbit.maxPolarAngle=Math.PI/2+.2;
+orbit.target.set(0,2.6,0);
+
+/* ─── LIGHTS — warm lab environment ─── */
+scene.add(new THREE.AmbientLight(0xfff8f0,0.9));
+scene.add(new THREE.HemisphereLight(0xfff5e6,0xb0a898,.7));
+const keyLight=new THREE.DirectionalLight(0xfff6e8,1.8);
+keyLight.position.set(6,14,6);keyLight.castShadow=true;
+keyLight.shadow.mapSize.set(2048,2048);
+keyLight.shadow.camera.near=1;keyLight.shadow.camera.far=30;
+keyLight.shadow.camera.left=-8;keyLight.shadow.camera.right=8;
+keyLight.shadow.camera.top=8;keyLight.shadow.camera.bottom=-8;
+scene.add(keyLight);
+const fillLight=new THREE.DirectionalLight(0xddeeff,.8);
+fillLight.position.set(-5,8,-4);scene.add(fillLight);
+const rimLight=new THREE.DirectionalLight(0xffffff,.5);
+rimLight.position.set(0,4,-8);scene.add(rimLight);
+const topSpot=new THREE.SpotLight(0xffffff,1.0,20,Math.PI/4,.5);
+topSpot.position.set(0,12,0);topSpot.castShadow=true;scene.add(topSpot);
+
+/* ─── MATERIALS — Realistic Lab Microscope (Olympus/Nikon style) ─── */
+const matBody=new THREE.MeshStandardMaterial({color:0xe8e4de,roughness:.35,metalness:.05});       /* Off-white/cream body — like real Olympus CX23 */
+const matBodyLight=new THREE.MeshStandardMaterial({color:0xf0ece6,roughness:.38,metalness:.03});  /* Slightly lighter cream panel */
+const matChrome=new THREE.MeshStandardMaterial({color:0xd4d4d4,roughness:.06,metalness:.97});     /* Polished chrome — real metal shine */
+const matChromeD=new THREE.MeshStandardMaterial({color:0xa8a8a8,roughness:.10,metalness:.95});    /* Brushed steel — knobs/hardware */
+const matLens=new THREE.MeshPhysicalMaterial({color:0x88bbee,roughness:0,metalness:0,transmission:.92,thickness:.5,clearcoat:1,ior:1.52}); /* Blue-coated glass optics */
+const matStage=new THREE.MeshStandardMaterial({color:0x1a1a1e,roughness:.55,metalness:.15});      /* Matte black stage — like real ones */
+const matRubber=new THREE.MeshStandardMaterial({color:0x1a1a1a,roughness:.95,metalness:0});       /* Black rubber grips */
+const matGlow=new THREE.MeshStandardMaterial({color:0xfff8ee,emissive:0xfff4dd,emissiveIntensity:1.2});
+const matGreen=new THREE.MeshStandardMaterial({color:0x2e8b57,roughness:.30,metalness:.40});      /* Muted green band — 10× */
+const matYellow=new THREE.MeshStandardMaterial({color:0xd4a017,roughness:.30,metalness:.40});     /* Golden yellow band — 40× */
+const matRed=new THREE.MeshStandardMaterial({color:0xc0392b,roughness:.30,metalness:.40});        /* Deep red band — 100× */
+const matWhitePlastic=new THREE.MeshStandardMaterial({color:0xf5f5f0,roughness:.42,metalness:.03});
+
+/* ─── FLOOR + TABLE ─── */
+const floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.MeshStandardMaterial({color:0xd6cfc4,roughness:.8}));
+floorMesh.rotation.x=-Math.PI/2;floorMesh.receiveShadow=true;scene.add(floorMesh);
+
+/* Lab bench — warm wood-toned surface */
+const tableMesh=new THREE.Mesh(new THREE.BoxGeometry(10,.18,6),new THREE.MeshStandardMaterial({color:0x8b7355,roughness:.6,metalness:.02}));
+tableMesh.position.y=.09;tableMesh.receiveShadow=true;tableMesh.castShadow=true;scene.add(tableMesh);
+
+/* ═══════════════════════════════════════════════
+   REALISTIC COMPOUND MICROSCOPE — DETAILED BUILD
+   ═══════════════════════════════════════════════ */
+const micro=new THREE.Group();
+scene.add(micro);
+micro.position.set(0,.18,0);
+micro.scale.set(.72,.72,.72);
+
+/* helper: lathe a profile for rounded shapes */
+function latheShape(points,segments=32){
+  return new THREE.LatheGeometry(points.map(p=>new THREE.Vector2(p[0],p[1])),segments);
+}
+
+/* helper: ridged knob */
+function createKnob(radius,height,ridges,mat){
+  const group=new THREE.Group();
+  // main cylinder
+  const mainGeo=new THREE.CylinderGeometry(radius,radius,height,32);
+  group.add(new THREE.Mesh(mainGeo,mat));
+  // ridges around edge
+  for(let i=0;i<ridges;i++){
+    const angle=(i/ridges)*Math.PI*2;
+    const ridge=new THREE.Mesh(new THREE.BoxGeometry(.015,height*.9,.04),mat);
+    ridge.position.set(Math.cos(angle)*radius,0,Math.sin(angle)*radius);
+    ridge.rotation.y=-angle;
+    group.add(ridge);
+  }
+  return group;
+}
+
+/* ── 1. BASE — Heavy horseshoe shape ── */
+// Main base plate (rounded rectangle via lathe approximation)
+const baseShape=new THREE.Shape();
+baseShape.moveTo(-1.6,0);baseShape.lineTo(-1.6,-.8);
+baseShape.quadraticCurveTo(-1.6,-1.4,-.8,-1.4);
+baseShape.lineTo(.8,-1.4);baseShape.quadraticCurveTo(1.6,-1.4,1.6,-.8);
+baseShape.lineTo(1.6,0);baseShape.quadraticCurveTo(1.6,.6,.8,.6);
+baseShape.lineTo(-.8,.6);baseShape.quadraticCurveTo(-1.6,.6,-1.6,0);
+
+const baseExtrudeSettings={depth:.4,bevelEnabled:true,bevelThickness:.06,bevelSize:.06,bevelSegments:4};
+const baseGeo=new THREE.ExtrudeGeometry(baseShape,baseExtrudeSettings);
+const baseMesh=new THREE.Mesh(baseGeo,matBody);
+baseMesh.rotation.x=-Math.PI/2;
+baseMesh.position.y=.42;
+baseMesh.castShadow=true;baseMesh.receiveShadow=true;
+micro.add(baseMesh);
+
+// Base top plate (slightly smaller, beveled)
+const baseTopGeo=new THREE.BoxGeometry(2.6,.08,2.2);
+const baseTop=new THREE.Mesh(baseTopGeo,matBodyLight);
+baseTop.position.set(0,.56,-.4);baseTop.castShadow=true;
+micro.add(baseTop);
+
+// Rubber feet (4 corners)
+const footPositions=[[-1.3,.18,-1.1],[1.3,.18,-1.1],[-1.3,.18,.4],[1.3,.18,.4]];
+footPositions.forEach(p=>{
+  const foot=new THREE.Mesh(new THREE.CylinderGeometry(.12,.14,.06,16),matRubber);
+  foot.position.set(...p);micro.add(foot);
+});
+
+/* ── 2. ARM/PILLAR — Curved ergonomic arm ── */
+// Vertical pillar
+const pillarGeo=new THREE.BoxGeometry(.55,5.2,.5);
+pillarGeo.translate(0,0,0);
+const pillar=new THREE.Mesh(pillarGeo,matBody);
+pillar.position.set(0,3.2,-.9);
+pillar.castShadow=true;
+micro.add(pillar);
+
+// Pillar front bevel/chamfer strips
+const chamferGeo=new THREE.BoxGeometry(.58,.12,.06);
+for(let y=0;y<8;y++){
+  const ch=new THREE.Mesh(chamferGeo,matBodyLight);
+  ch.position.set(0,.8+y*.65,-.64);micro.add(ch);
+}
+
+// Curved arm top connecting pillar to head
+const armCurveShape=new THREE.Shape();
+armCurveShape.moveTo(0,0);armCurveShape.lineTo(1.2,0);
+armCurveShape.quadraticCurveTo(1.5,0,1.5,.3);
+armCurveShape.lineTo(1.5,.5);armCurveShape.lineTo(0,.5);
+armCurveShape.closePath();
+const armCurveGeo=new THREE.ExtrudeGeometry(armCurveShape,{depth:.48,bevelEnabled:true,bevelThickness:.03,bevelSize:.03,bevelSegments:2});
+const armCurve=new THREE.Mesh(armCurveGeo,matBody);
+armCurve.position.set(-.75,5.55,-1.14);
+armCurve.castShadow=true;
+micro.add(armCurve);
+
+// Arm back reinforcement
+const armBackGeo=new THREE.BoxGeometry(.52,.6,.08);
+const armBack=new THREE.Mesh(armBackGeo,matBodyLight);
+armBack.position.set(0,5.8,-1.18);micro.add(armBack);
+
+/* ── 3. HEAD/BODY TUBE HOUSING ── */
+const headGeo=new THREE.CylinderGeometry(.5,.5,.6,32);
+const head=new THREE.Mesh(headGeo,matBody);
+head.position.set(0,6.35,-.4);head.castShadow=true;
+micro.add(head);
+
+// Head decorative ring
+const headRing=new THREE.Mesh(new THREE.TorusGeometry(.52,.04,8,32),matChrome);
+headRing.position.set(0,6.65,-.4);headRing.rotation.x=Math.PI/2;
+micro.add(headRing);
+
+/* ── 4. EYEPIECE TUBE (Monocular) ── */
+// Main tube
+const eyeTubeGeo=new THREE.CylinderGeometry(.16,.16,1.6,24);
+const eyeTube=new THREE.Mesh(eyeTubeGeo,matChrome);
+eyeTube.position.set(0,7.5,-.4);eyeTube.castShadow=true;
+micro.add(eyeTube);
+
+// Eyepiece wider section (rubber grip)
+const eyeGripGeo=new THREE.CylinderGeometry(.22,.2,.35,24);
+const eyeGrip=new THREE.Mesh(eyeGripGeo,matRubber);
+eyeGrip.position.set(0,8.15,-.4);micro.add(eyeGrip);
+
+// Eyepiece rubber ring ridges
+for(let i=0;i<12;i++){
+  const angle=(i/12)*Math.PI*2;
+  const r=new THREE.Mesh(new THREE.BoxGeometry(.012,.3,.03),matRubber);
+  r.position.set(Math.cos(angle)*.22,8.15,-.4+Math.sin(angle)*.22);
+  r.rotation.y=-angle;micro.add(r);
+}
+
+// Eyepiece lens (top — glass)
+const eyeLensGeo=new THREE.CylinderGeometry(.18,.18,.06,24);
+const eyeLens=new THREE.Mesh(eyeLensGeo,matLens);
+eyeLens.position.set(0,8.35,-.4);micro.add(eyeLens);
+
+// Eyepiece chrome ring at top
+const eyeRing=new THREE.Mesh(new THREE.TorusGeometry(.19,.025,8,24),matChrome);
+eyeRing.position.set(0,8.36,-.4);eyeRing.rotation.x=Math.PI/2;micro.add(eyeRing);
+
+// 10× label on eyepiece
+const eyeLabel=createTextSprite('10× WF',.22);
+eyeLabel.position.set(.3,8.0,-.4);micro.add(eyeLabel);
+
+/* ── 5. BODY TUBE (connects head to nosepiece) ── */
+const bodyTubeGeo=new THREE.CylinderGeometry(.14,.18,1.2,20);
+const bodyTube=new THREE.Mesh(bodyTubeGeo,matBodyLight);
+bodyTube.position.set(0,5.45,-.4);bodyTube.castShadow=true;
+micro.add(bodyTube);
+
+/* ── 6. REVOLVING NOSEPIECE ── */
+const nosepieceGroup=new THREE.Group();
+nosepieceGroup.position.set(0,4.65,-.4);
+micro.add(nosepieceGroup);
+
+// Nosepiece disc (beveled)
+const npDiscGeo=new THREE.CylinderGeometry(.45,.5,.15,32);
+const npDisc=new THREE.Mesh(npDiscGeo,matChrome);
+nosepieceGroup.add(npDisc);
+
+// Nosepiece bottom ring
+const npRing=new THREE.Mesh(new THREE.TorusGeometry(.48,.03,8,32),matChromeD);
+npRing.position.y=-.08;npRing.rotation.x=Math.PI/2;
+nosepieceGroup.add(npRing);
+
+// Grip ridges on nosepiece edge
+for(let i=0;i<20;i++){
+  const a=(i/20)*Math.PI*2;
+  const rid=new THREE.Mesh(new THREE.BoxGeometry(.02,.12,.04),matChromeD);
+  rid.position.set(Math.cos(a)*.47,0,Math.sin(a)*.47);
+  rid.rotation.y=-a;nosepieceGroup.add(rid);
+}
+
+/* ── 7. OBJECTIVE LENSES — 3 realistic objectives ── */
+const objColors=[matGreen,matYellow,matRed];
+const objLengths=[.7,.95,1.3];
+const objRadii=[[.065,.055],[.06,.045],[.05,.035]];
+const objLabels=['10×','40×','100×'];
+
+MAGNIFICATIONS.forEach((m,i)=>{
+  const angle=(i/3)*Math.PI*2;
+  const g=new THREE.Group();
+  g.rotation.y=angle;
+
+  // Objective housing — chrome/silver body like real objectives
+  const housing=new THREE.Mesh(
+    new THREE.CylinderGeometry(objRadii[i][0],objRadii[i][0],objLengths[i],16),
+    matChromeD
+  );
+  housing.position.set(.35,-(objLengths[i]/2)-.1,0);
+  housing.castShadow=true;
+  g.add(housing);
+
+  // Objective chrome collar
+  const collar=new THREE.Mesh(
+    new THREE.CylinderGeometry(objRadii[i][0]+.015,objRadii[i][0]+.015,.06,16),
+    matChrome
+  );
+  collar.position.set(.35,-.12,0);
+  g.add(collar);
+
+  // Objective tip (narrower) — also chrome
+  const tip=new THREE.Mesh(
+    new THREE.CylinderGeometry(objRadii[i][1],objRadii[i][1],.12,16),
+    matChromeD
+  );
+  tip.position.set(.35,-(objLengths[i])-.1,0);
+  g.add(tip);
+
+  // Lens at tip
+  const lens=new THREE.Mesh(
+    new THREE.CylinderGeometry(objRadii[i][1]-.005,objRadii[i][1]-.005,.02,16),
+    matLens
+  );
+  lens.position.set(.35,-(objLengths[i])-.17,0);
+  g.add(lens);
+
+  // Color identification band — thin colored ring like real objectives
+  const band=new THREE.Mesh(
+    new THREE.TorusGeometry(objRadii[i][0]+.005,.012,8,16),
+    objColors[i]
+  );
+  band.position.set(.35,-.25,0);band.rotation.x=Math.PI/2;
+  g.add(band);
+
+  // Second color band for visibility
+  const band2=new THREE.Mesh(
+    new THREE.TorusGeometry(objRadii[i][0]+.005,.008,8,16),
+    objColors[i]
+  );
+  band2.position.set(.35,-.35,0);band2.rotation.x=Math.PI/2;
+  g.add(band2);
+
+  // Label
+  const lbl=createTextSprite(objLabels[i],.12);
+  lbl.position.set(.35,-.05+.12,0);
+  g.add(lbl);
+
+  nosepieceGroup.add(g);
+});
+
+/* ── 8. STAGE — Mechanical stage with controls ── */
+const stageGroup=new THREE.Group();
+stageGroup.position.set(0,3.0,-.4);
+micro.add(stageGroup);
+
+// Main stage plate
+const stageGeo=new THREE.BoxGeometry(2.4,.1,2.0);
+const stageMesh=new THREE.Mesh(stageGeo,matStage);
+stageMesh.castShadow=true;stageMesh.receiveShadow=true;
+stageGroup.add(stageMesh);
+
+// Stage top surface detail lines
+for(let i=-4;i<=4;i++){
+  const line=new THREE.Mesh(new THREE.BoxGeometry(2.2,.005,.008),matChromeD);
+  line.position.set(0,.052,i*.18);stageGroup.add(line);
+}
+
+// Aperture hole in stage (dark circle)
+const apertureGeo=new THREE.CylinderGeometry(.2,.2,.12,24);
+const aperture=new THREE.Mesh(apertureGeo,new THREE.MeshStandardMaterial({color:0x020202,roughness:.9,metalness:0}));
+aperture.position.set(0,0,0);stageGroup.add(aperture);
+
+// Stage clips (spring-loaded style)
+for(let side of[-1,1]){
+  // Clip base
+  const clipBase=new THREE.Mesh(new THREE.BoxGeometry(.12,.04,.5),matChrome);
+  clipBase.position.set(side*.7,.07,-.3);stageGroup.add(clipBase);
+  // Clip arm
+  const clipArm=new THREE.Mesh(new THREE.BoxGeometry(.08,.03,.35),matChrome);
+  clipArm.position.set(side*.7,.09,-.15);
+  clipArm.rotation.z=side*-.08;stageGroup.add(clipArm);
+  // Clip tip
+  const clipTip=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.04,8),matChrome);
+  clipTip.position.set(side*.7,.1,.02);clipTip.rotation.x=Math.PI/2;
+  stageGroup.add(clipTip);
+}
+
+// Mechanical stage X-Y control (right side)
+const mechXGeo=new THREE.CylinderGeometry(.08,.08,.5,12);
+const mechX=new THREE.Mesh(mechXGeo,matChromeD);
+mechX.rotation.z=Math.PI/2;mechX.position.set(1.5,-.05,.3);
+stageGroup.add(mechX);
+
+const mechXKnob=createKnob(.12,.08,16,matChromeD);
+mechXKnob.rotation.z=Math.PI/2;mechXKnob.position.set(1.78,-.05,.3);
+stageGroup.add(mechXKnob);
+
+const mechY=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,.4,12),matChromeD);
+mechY.rotation.x=Math.PI/2;mechY.position.set(1.5,-.05,.7);
+stageGroup.add(mechY);
+
+const mechYKnob=createKnob(.1,.07,12,matChromeD);
+mechYKnob.rotation.x=Math.PI/2;mechYKnob.position.set(1.5,-.05,.92);
+stageGroup.add(mechYKnob);
+
+/* ── 9. COARSE FOCUS KNOB — Large, both sides ── */
+const coarseKnobL=createKnob(.32,.14,28,matChromeD);
+coarseKnobL.rotation.z=Math.PI/2;
+coarseKnobL.position.set(-.55,3.8,-.9);
+micro.add(coarseKnobL);
+
+const coarseKnobR=createKnob(.32,.14,28,matChromeD);
+coarseKnobR.rotation.z=Math.PI/2;
+coarseKnobR.position.set(.55,3.8,-.9);
+micro.add(coarseKnobR);
+
+/* ── 10. FINE FOCUS KNOB — Smaller, both sides ── */
+const fineKnobL=createKnob(.22,.1,20,matChrome);
+fineKnobL.rotation.z=Math.PI/2;
+fineKnobL.position.set(-.55,3.2,-.9);
+micro.add(fineKnobL);
+
+const fineKnobR=createKnob(.22,.1,20,matChrome);
+fineKnobR.rotation.z=Math.PI/2;
+fineKnobR.position.set(.55,3.2,-.9);
+micro.add(fineKnobR);
+
+/* ── 11. SUB-STAGE CONDENSER ── */
+const condenserHousing=new THREE.Mesh(new THREE.CylinderGeometry(.28,.22,.5,24),matBodyLight);
+condenserHousing.position.set(0,2.35,-.4);condenserHousing.castShadow=true;
+micro.add(condenserHousing);
+
+const condenserLens=new THREE.Mesh(new THREE.SphereGeometry(.2,24,12,0,Math.PI*2,0,Math.PI/2),matLens);
+condenserLens.position.set(0,2.1,-.4);condenserLens.rotation.x=Math.PI;
+micro.add(condenserLens);
+
+// Condenser adjustment knob
+const condKnob=createKnob(.1,.06,12,matChromeD);
+condKnob.rotation.z=Math.PI/2;
+condKnob.position.set(.5,2.35,-.4);
+micro.add(condKnob);
+
+/* ── 12. IRIS DIAPHRAGM LEVER ── */
+const irisLever=new THREE.Mesh(new THREE.BoxGeometry(.4,.02,.03),matChrome);
+irisLever.position.set(.35,2.55,-.15);
+irisLever.rotation.y=-.3;
+micro.add(irisLever);
+
+const irisKnob=new THREE.Mesh(new THREE.SphereGeometry(.03,8,8),matChrome);
+irisKnob.position.set(.55,2.55,-.08);micro.add(irisKnob);
+
+/* ── 13. ILLUMINATOR (built-in light source) ── */
+const lightHousingGeo=new THREE.CylinderGeometry(.3,.35,.3,24);
+const lightHousing=new THREE.Mesh(lightHousingGeo,matBody);
+lightHousing.position.set(0,1.3,-.4);lightHousing.castShadow=true;
+micro.add(lightHousing);
+
+const lightBulb=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.06,24),matGlow);
+lightBulb.position.set(0,1.48,-.4);micro.add(lightBulb);
+
+// Actual point light coming from illuminator
+const illuminator=new THREE.PointLight(0xfff4dd,1.2,5);
+illuminator.position.set(0,1.6,-.4);micro.add(illuminator);
+
+// Light collector cone
+const collectorGeo=new THREE.CylinderGeometry(.15,.28,.4,20,1,true);
+const collectorMat=new THREE.MeshStandardMaterial({color:0x2a2a2a,roughness:.3,metalness:.7,side:THREE.DoubleSide});
+const collector=new THREE.Mesh(collectorGeo,collectorMat);
+collector.position.set(0,1.7,-.4);micro.add(collector);
+
+/* ── 14. PILLAR-to-STAGE bracket ── */
+const bracketGeo=new THREE.BoxGeometry(.6,.15,.6);
+const bracket=new THREE.Mesh(bracketGeo,matBody);
+bracket.position.set(0,2.68,-.65);micro.add(bracket);
+
+/* ── 15. POWER CORD (decorative) ── */
+const cordCurve=new THREE.QuadraticBezierCurve3(
+  new THREE.Vector3(-.8,.6,-.6),
+  new THREE.Vector3(-2,.1,-.3),
+  new THREE.Vector3(-2.5,.2,.5)
+);
+const cordGeo=new THREE.TubeGeometry(cordCurve,20,.025,8,false);
+const cord=new THREE.Mesh(cordGeo,matRubber);
+micro.add(cord);
+
+/* ── 16. BRAND LABEL ── */
+const brandLabel=createTextSprite('MicroMetry',.35);
+brandLabel.position.set(0,4.5,-.62);
+micro.add(brandLabel);
+
+const modelLabel=createTextSprite('XR-2000 PRO',.2);
+modelLabel.position.set(0,4.2,-.62);
+micro.add(modelLabel);
+
+/* ── 17. ON/OFF switch on base ── */
+const switchBase=new THREE.Mesh(new THREE.BoxGeometry(.15,.04,.08),matBody);
+switchBase.position.set(1.1,.6,-.1);micro.add(switchBase);
+const switchToggle=new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.05),new THREE.MeshStandardMaterial({color:0x2e8b57,roughness:.4,metalness:.1}));
+switchToggle.position.set(1.13,.64,-.1);micro.add(switchToggle);
+
+/* ── 18. BRIGHTNESS DIAL on base ── */
+const brightDial=createKnob(.08,.04,10,matChromeD);
+brightDial.position.set(.8,.64,.3);micro.add(brightDial);
+const dialLabel=createTextSprite('BRIGHT',.12);
+dialLabel.position.set(.8,.75,.3);micro.add(dialLabel);
+
+/* Text sprite helper */
+function createTextSprite(text,size){
+  const c=document.createElement('canvas');c.width=256;c.height=64;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#1a1a2e';ctx.font='bold 32px Segoe UI, sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.shadowColor='rgba(255,255,255,0.3)';ctx.shadowBlur=2;
+  ctx.fillText(text,128,32);
+  const tex=new THREE.CanvasTexture(c);
+  tex.minFilter=THREE.LinearFilter;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true}));
+  sp.scale.set(size,size*.25,1);return sp;
+}
+
+/* ═══════════════════════════════════════════════
+   EYEPIECE 2D CANVAS
+   ═══════════════════════════════════════════════ */
+const eyeCanvas=$('#eyepiece-canvas');
+const ectx=eyeCanvas.getContext('2d');
+let eyeSize=400;
+
+function resizeEyepiece(){
+  const w=$('#eyepiece-wrapper');
+  const s=Math.min(w.clientWidth,w.clientHeight)-20;
+  eyeSize=Math.max(200,s);
+  eyeCanvas.width=eyeSize;eyeCanvas.height=eyeSize;
+}
+
+function drawEyepiece(time){
+  const s=eyeSize,r=s/2,cx=r,cy=r;
+  ectx.clearRect(0,0,s,s);
+  ectx.save();
+  ectx.beginPath();ectx.arc(cx,cy,r,0,Math.PI*2);ectx.clip();
+  const bg=ectx.createRadialGradient(cx,cy,0,cx,cy,r);
+  bg.addColorStop(0,'#f8f8f0');bg.addColorStop(.85,'#e8e8d8');bg.addColorStop(1,'#888');
+  ectx.fillStyle=bg;ectx.fillRect(0,0,s,s);
+
+  const blur=computeBlur();
+  if(blur>0){ectx.fillStyle=`rgba(245,245,235,${Math.min(blur*.015,.85)})`;ectx.fillRect(0,0,s,s)}
+
+  const scale=mag()/10;
+  if(S.mode==='calibrate')drawCalibrationView(time,scale,blur);
+  else drawObjectView(time,scale,blur);
+
+  drawGraticule(scale);
+
+  const vig=ectx.createRadialGradient(cx,cy,r*.65,cx,cy,r);
+  vig.addColorStop(0,'transparent');vig.addColorStop(1,'rgba(0,0,0,.7)');
+  ectx.fillStyle=vig;ectx.fillRect(0,0,s,s);
+  ectx.restore();
+
+  ectx.strokeStyle='#333';ectx.lineWidth=4;
+  ectx.beginPath();ectx.arc(cx,cy,r-2,0,Math.PI*2);ectx.stroke();
+}
+
+function computeBlur(){return Math.abs(S.coarseFocus-50)*1.5+Math.abs(S.fineFocus-50)*.3}
+
+function drawGraticule(){
+  const s=eyeSize,cx=s/2,cy=s/2,divCount=10,totalLen=s*.75,divLen=totalLen/divCount;
+  ectx.strokeStyle='rgba(0,0,0,.6)';ectx.lineWidth=1.5;
+  const startX=cx-totalLen/2;
+  ectx.beginPath();ectx.moveTo(startX,cy);ectx.lineTo(startX+totalLen,cy);ectx.stroke();
+  for(let i=0;i<=divCount;i++){
+    const x=startX+i*divLen,h=i%5===0?12:6;
+    ectx.beginPath();ectx.moveTo(x,cy-h);ectx.lineTo(x,cy+h);ectx.stroke();
+  }
+  ectx.fillStyle='rgba(0,0,0,.5)';ectx.font=`${Math.max(9,s*.025)}px sans-serif`;ectx.textAlign='center';
+  for(let i=0;i<=divCount;i++){if(i%5===0)ectx.fillText(i,startX+i*divLen,cy+22)}
+}
+
+function drawCalibrationView(time,scale,blur){
+  const s=eyeSize,cx=s/2,cy=s/2;
+  const visibleDivs=Math.round(60/scale);
+  const divPx=(s*.75)/10;
+  const stageDivPx=divPx*(10/visibleDivs);
+  ectx.save();
+  if(blur>5)ectx.globalAlpha=Math.max(.15,1-blur*.012);
+  const stageY=cy+35;
+  const stageStartX=cx-(visibleDivs*stageDivPx)/2+Math.sin(time*.0003)*2;
+  ectx.strokeStyle='rgba(180,60,60,.7)';ectx.lineWidth=1;
+  ectx.beginPath();ectx.moveTo(stageStartX,stageY);ectx.lineTo(stageStartX+visibleDivs*stageDivPx,stageY);ectx.stroke();
+  for(let i=0;i<=visibleDivs;i++){
+    const x=stageStartX+i*stageDivPx;
+    if(x<cx-s*.4||x>cx+s*.4)continue;
+    const h=i%10===0?10:i%5===0?7:4;
+    ectx.beginPath();ectx.moveTo(x,stageY-h);ectx.lineTo(x,stageY+h);ectx.stroke();
+    if(i%10===0){ectx.fillStyle='rgba(180,60,60,.6)';ectx.font=`${Math.max(8,s*.02)}px sans-serif`;ectx.textAlign='center';ectx.fillText(i,x,stageY+20)}
+  }
+  ectx.restore();
+  ectx.fillStyle='rgba(0,0,0,.35)';ectx.font=`${Math.max(9,s*.025)}px sans-serif`;ectx.textAlign='center';
+  ectx.fillText('Stage Micrometer (red) — 1 div = 10 µm',cx,cy-s*.32);
+  ectx.fillText('Eyepiece Graticule (black) — count matching divs',cx,cy+s*.38);
+}
+
+function drawObjectView(time,scale,blur){
+  const s=eyeSize,cx=s/2,cy=s/2;
+  if(!S.trueSize)return;
+  const obj=OBJECTS[S.selectedObj];
+  const sizeInDivs=S.trueSize/(S.calibrations[mag()]||10);
+  const pxPerDiv=(s*.75)/10;
+  const objPx=sizeInDivs*pxPerDiv;
+  ectx.save();
+  if(blur>5)ectx.globalAlpha=Math.max(.2,1-blur*.012);
+  const ox=cx+Math.sin(time*.001)*2,oy=cy+Math.cos(time*.0013)*1.5;
+  switch(obj.shape){
+    case'ellipse':drawOnionCell(ox,oy,objPx,time,obj);break;
+    case'round':drawCheekCell(ox,oy,objPx,time,obj);break;
+    case'rod':drawBacterialRod(ox,oy,objPx,time,obj);break;
+    case'fiber':drawFiber(ox,oy,objPx,time,obj);break;
+    case'crystal':drawCrystal(ox,oy,objPx,time,obj);break;
+    case'spiky':drawPollen(ox,oy,objPx,time,obj);break;
+  }
+  ectx.restore();
+}
+
+function c2s(hex){return'#'+hex.toString(16).padStart(6,'0')}
+
+function drawOnionCell(x,y,sz,t,obj){
+  const w=sz,h=sz*.55;
+  ectx.save();ectx.translate(x,y);ectx.rotate(Math.sin(t*.0005)*.05);
+  ectx.strokeStyle=c2s(obj.color2);ectx.lineWidth=3;
+  ectx.beginPath();ectx.ellipse(0,0,w/2,h/2,0,0,Math.PI*2);ectx.stroke();
+  ectx.fillStyle=c2s(obj.color)+'44';
+  ectx.beginPath();ectx.ellipse(0,0,w/2,h/2,0,0,Math.PI*2);ectx.fill();
+  ectx.fillStyle=c2s(obj.color2)+'88';
+  ectx.beginPath();ectx.ellipse(w*.1,-h*.05,w*.12,h*.15,0,0,Math.PI*2);ectx.fill();
+  for(let i=-2;i<=2;i++){ectx.strokeStyle=c2s(obj.color2)+'33';ectx.lineWidth=1;ectx.beginPath();ectx.moveTo(-w/2,i*h*.15);ectx.lineTo(w/2,i*h*.15);ectx.stroke()}
+  ectx.restore();
+}
+function drawCheekCell(x,y,sz,t,obj){
+  ectx.save();ectx.translate(x,y);const r=sz/2;
+  ectx.fillStyle=c2s(obj.color)+'55';ectx.strokeStyle=c2s(obj.color2)+'99';ectx.lineWidth=2;
+  ectx.beginPath();for(let i=0;i<20;i++){const a=(i/20)*Math.PI*2;const rr=r*(1+Math.sin(a*3+t*.001)*.08);i===0?ectx.moveTo(Math.cos(a)*rr,Math.sin(a)*rr):ectx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr)}
+  ectx.closePath();ectx.fill();ectx.stroke();
+  ectx.fillStyle=c2s(obj.color2)+'aa';ectx.beginPath();ectx.arc(r*.1,-r*.05,r*.25,0,Math.PI*2);ectx.fill();
+  for(let i=0;i<8;i++){ectx.fillStyle=c2s(obj.color2)+'33';ectx.beginPath();ectx.arc(Math.cos(i)*r*.5,Math.sin(i*1.7)*r*.5,2,0,Math.PI*2);ectx.fill()}
+  ectx.restore();
+}
+function drawBacterialRod(x,y,sz,t,obj){
+  ectx.save();ectx.translate(x,y);ectx.rotate(Math.sin(t*.002)*.15);
+  const w=sz,h=sz*.3,rr=h/2;
+  ectx.fillStyle=c2s(obj.color)+'88';ectx.strokeStyle=c2s(obj.color2);ectx.lineWidth=2;
+  ectx.beginPath();ectx.moveTo(-w/2+rr,-h/2);ectx.lineTo(w/2-rr,-h/2);ectx.arc(w/2-rr,0,rr,-Math.PI/2,Math.PI/2);ectx.lineTo(-w/2+rr,h/2);ectx.arc(-w/2+rr,0,rr,Math.PI/2,-Math.PI/2);ectx.closePath();ectx.fill();ectx.stroke();
+  ectx.globalAlpha=.4;
+  for(let i=0;i<3;i++){ectx.save();ectx.translate(Math.sin(i*2.5)*sz*.8,Math.cos(i*3.1)*sz*.6);ectx.rotate(i*1.2+Math.sin(t*.001+i)*.1);ectx.scale(.7,.7);ectx.beginPath();ectx.moveTo(-w/2+rr,-h/2);ectx.lineTo(w/2-rr,-h/2);ectx.arc(w/2-rr,0,rr,-Math.PI/2,Math.PI/2);ectx.lineTo(-w/2+rr,h/2);ectx.arc(-w/2+rr,0,rr,Math.PI/2,-Math.PI/2);ectx.closePath();ectx.fill();ectx.stroke();ectx.restore()}
+  ectx.restore();
+}
+function drawFiber(x,y,sz,t,obj){
+  ectx.save();ectx.translate(x,y);
+  ectx.strokeStyle=c2s(obj.color2);ectx.lineWidth=sz*.12;ectx.lineCap='round';
+  ectx.beginPath();ectx.moveTo(-sz/2,0);
+  for(let i=0;i<=20;i++){ectx.lineTo(-sz/2+(i/20)*sz,Math.sin(i*.8+t*.002)*sz*.08)}
+  ectx.stroke();
+  ectx.strokeStyle=c2s(obj.color)+'66';ectx.lineWidth=1;
+  for(let j=-2;j<=2;j++){ectx.beginPath();for(let i=0;i<=20;i++){const px=-sz/2+(i/20)*sz,py=Math.sin(i*.8+t*.002)*sz*.08+j*sz*.025;i===0?ectx.moveTo(px,py):ectx.lineTo(px,py)}ectx.stroke()}
+  ectx.restore();
+}
+function drawCrystal(x,y,sz,t,obj){
+  ectx.save();ectx.translate(x,y);ectx.rotate(Math.sin(t*.0004)*.03);
+  const s=sz/2;
+  ectx.fillStyle=c2s(obj.color)+'44';ectx.strokeStyle=c2s(obj.color2)+'cc';ectx.lineWidth=2;
+  ectx.beginPath();ectx.moveTo(0,-s);ectx.lineTo(s*.9,-s*.3);ectx.lineTo(s*.9,s*.3);ectx.lineTo(0,s);ectx.lineTo(-s*.9,s*.3);ectx.lineTo(-s*.9,-s*.3);ectx.closePath();ectx.fill();ectx.stroke();
+  ectx.strokeStyle=c2s(obj.color2)+'44';ectx.beginPath();ectx.moveTo(0,-s);ectx.lineTo(0,s);ectx.stroke();
+  ectx.beginPath();ectx.moveTo(-s*.9,-s*.3);ectx.lineTo(s*.9,s*.3);ectx.stroke();
+  ectx.fillStyle='rgba(255,255,255,'+(Math.sin(t*.003)*.3+.3)+')';
+  ectx.beginPath();ectx.arc(s*.2,-s*.2,3,0,Math.PI*2);ectx.fill();
+  ectx.restore();
+}
+function drawPollen(x,y,sz,t,obj){
+  ectx.save();ectx.translate(x,y);ectx.rotate(t*.0003);
+  const r=sz/2;
+  ectx.fillStyle=c2s(obj.color)+'77';ectx.strokeStyle=c2s(obj.color2);ectx.lineWidth=1.5;
+  ectx.beginPath();const spikes=16;
+  for(let i=0;i<spikes;i++){const a=(i/spikes)*Math.PI*2;const outerR=r*(1+(i%2===0?.25:.05));const innerR=r*.85;const midA=((i+.5)/spikes)*Math.PI*2;if(i===0)ectx.moveTo(Math.cos(a)*outerR,Math.sin(a)*outerR);ectx.lineTo(Math.cos(a)*outerR,Math.sin(a)*outerR);ectx.lineTo(Math.cos(midA)*innerR,Math.sin(midA)*innerR)}
+  ectx.closePath();ectx.fill();ectx.stroke();
+  ectx.fillStyle=c2s(obj.color2)+'55';ectx.beginPath();ectx.arc(0,0,r*.4,0,Math.PI*2);ectx.fill();
+  for(let i=0;i<6;i++){const a=(i/6)*Math.PI*2;ectx.fillStyle=c2s(obj.color2)+'44';ectx.beginPath();ectx.arc(Math.cos(a)*r*.55,Math.sin(a)*r*.55,r*.08,0,Math.PI*2);ectx.fill()}
+  ectx.restore();
+}
+
+/* ═══════════════════════════════════════════════
+   CONTROLS UI
+   ═══════════════════════════════════════════════ */
+function buildControls(){
+  const c=$('#controls');
+  c.innerHTML=`
+  <div class="ctrl-group"><label>Mode<select id="sel-mode"><option value="calibrate">Calibration</option><option value="measure">Measurement</option><option value="test">Timed Test</option></select></label></div>
+  <div class="sep"></div>
+  <div class="ctrl-group"><label>Magnification<select id="sel-mag">${MAGNIFICATIONS.map((m,i)=>`<option value="${i}">${m}×</option>`).join('')}</select></label></div>
+  <div class="sep"></div>
+  <div class="ctrl-group"><label>Object<select id="sel-obj">${OBJECTS.map((o,i)=>`<option value="${i}">${o.name} ${'★'.repeat(o.difficulty)}</option>`).join('')}</select></label></div>
+  <div class="sep"></div>
+  <div class="ctrl-group"><label>Coarse Focus<input type="range" id="rng-coarse" min="0" max="100" value="50"></label></div>
+  <div class="ctrl-group"><label>Fine Focus<input type="range" id="rng-fine" min="0" max="100" value="50"></label></div>
+  <div class="sep"></div>
+  <div class="ctrl-group" id="cal-controls">
+    <label>Stage Divs aligned<input type="number" id="inp-stage-divs" min="1" max="200" value="" placeholder="count" step="1" style="width:75px"></label>
+    <label>over Ocular Divs<input type="number" id="inp-oc-divs" min="1" max="100" value="" placeholder="count" step="1" style="width:75px"></label>
+    <button id="btn-calibrate">Calibrate</button>
+    <span class="badge" id="cal-hint" style="color:var(--warn);font-size:.62rem"></span>
+  </div>
+  <div class="ctrl-group" id="meas-controls" style="display:none">
+    <label>Ocular Divisions<input type="number" id="inp-meas-divs" min="0.1" max="100" value="1" step="0.1" style="width:70px"></label>
+    <button id="btn-measure">Measure</button>
+    <button id="btn-new-obj" class="secondary">New Object</button>
+  </div>
+  <div class="ctrl-group" id="test-controls" style="display:none"><button id="btn-start-test">Start Timed Test</button></div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <label><input type="checkbox" id="chk-guide" checked> Guided</label>
+    <label><input type="checkbox" id="chk-solution"> Solution</label>
+  </div>
+  <div class="sep"></div>
+  <button id="btn-report" class="secondary">Report</button>
+  <button id="btn-download" class="secondary">Download</button>
+  <div id="guide-area"></div>
+  <div id="result-area"></div>`;
+
+  $('#sel-mode').onchange=e=>{S.mode=e.target.value;updateModeUI();$('#mode-label').textContent={calibrate:'Calibration',measure:'Measurement',test:'Timed Test'}[S.mode]};
+  $('#sel-mag').onchange=e=>{S.magIdx=+e.target.value;S.targetAngle=S.magIdx*(Math.PI*2/3);$('#mag-label').textContent=mag()+'×';updateCalHint();updateGuide();};
+  $('#sel-obj').onchange=e=>{S.selectedObj=+e.target.value;$('#obj-label').textContent=OBJECTS[S.selectedObj].name;spawnObject();updateGuide()};
+  $('#rng-coarse').oninput=e=>{S.coarseFocus=+e.target.value};
+  $('#rng-fine').oninput=e=>{S.fineFocus=+e.target.value};
+  $('#btn-calibrate').onclick=doCalibration;
+  $('#btn-measure').onclick=doMeasurement;
+  $('#btn-new-obj').onclick=spawnObject;
+  $('#btn-start-test').onclick=startTest;
+  $('#btn-report').onclick=showReport;
+  $('#btn-download').onclick=downloadReport;
+  $('#chk-guide').onchange=e=>{S.guidedMode=e.target.checked;updateGuide()};
+  $('#chk-solution').onchange=e=>{S.showSolution=e.target.checked;updateGuide()};
+  updateModeUI();updateGuide();
+}
+
+function updateModeUI(){
+  const isCal=S.mode==='calibrate',isMeas=S.mode==='measure',isTest=S.mode==='test';
+  $('#cal-controls').style.display=isCal?'flex':'none';
+  $('#meas-controls').style.display=isMeas?'flex':'none';
+  $('#test-controls').style.display=isTest?'flex':'none';
+  $('#timer-wrap').style.display=isTest?'flex':'none';
+  if(isMeas||isTest)spawnObject();
+  updateGuide();
+}
+
+function updateGuide(){
+  const g=$('#guide-area');if(!g)return;
+  if(!S.guidedMode){g.innerHTML='';return}
+  let tip='';
+  if(S.mode==='calibrate'){
+    const expectedCals={10:60,40:15,100:6};
+    const exp=expectedCals[mag()];
+    tip=`<b>Step 1:</b> Look at eyepiece. <b>Red scale</b> = stage micrometer (1 div = 10 µm). <b>Black scale</b> = eyepiece graticule.<br><b>Step 2:</b> Count how many <b>red (stage) divs</b> align with a set of <b>black (ocular) divs</b>.<br><b>Step 3:</b> Enter both counts → Calibrate.<br><b>Hint at ${mag()}×:</b> ~${Math.round(exp*10/10)} stage divs should align with ~10 ocular divs → expect ~${exp} µm/div`;
+    if(S.calibrations[mag()]){
+      tip+=`<br><b>✓ Calibrated ${mag()}×:</b> 1 ocular div = ${S.calibrations[mag()].toFixed(2)} µm`;
+      const diff=Math.abs(S.calibrations[mag()]-exp)/exp*100;
+      if(diff>25)tip+=`<br><span style="color:var(--err)">⚠ Value seems off! Expected ~${exp} µm/div at ${mag()}×. Re-calibrate?</span>`;
+    }
+    const hint=$('#cal-hint');
+    if(hint)hint.textContent=`Expected: ~${exp} µm/div at ${mag()}×`;
+  }else if(S.mode==='measure'){
+    if(!S.calibrations[mag()])tip='<b>⚠ Not calibrated at this magnification!</b> Calibrate first.';
+    else{
+      tip=`<b>Step 1:</b> Focus on ${OBJECTS[S.selectedObj].name}.<br><b>Step 2:</b> Count ocular divisions spanning object.<br><b>Step 3:</b> Enter → Measure.`;
+      if(S.showSolution&&S.trueSize){const divs=S.trueSize/S.calibrations[mag()];tip+=`<br><b>Solution:</b> ${S.trueSize.toFixed(1)} µm → ${divs.toFixed(2)} divs`}
+    }
+  }else tip='<b>Timed Test:</b> 6 objects, 60s each. Accuracy = grade!';
+  g.innerHTML=`<div class="guide-tip">${tip}</div>`;
+}
+
+function updateCalHint(){
+  const expectedCals={10:60,40:15,100:6};
+  const exp=expectedCals[mag()];
+  const hint=$('#cal-hint');
+  if(hint)hint.textContent=`Expected: ~${exp} µm/div at ${mag()}×`;
+}
+
+function doCalibration(){
+  const sd=+$('#inp-stage-divs').value,od=+$('#inp-oc-divs').value;
+  if(!sd||!od||sd<1||od<1){toast('Enter valid division counts! Look at the eyepiece view.');return}
+  // cal = (stage_divs × 10µm_each) / ocular_divs = µm per 1 ocular div
+  const cal=(sd*10)/od;
+  const expectedCals={10:60,40:15,100:6};
+  const exp=expectedCals[mag()];
+  const diff=Math.abs(cal-exp)/exp*100;
+  S.calibrations[mag()]=cal;
+  $('#cal-label').textContent=cal.toFixed(2)+' µm/div';
+  if(diff>30){
+    toast(`⚠ Calibrated ${mag()}×: ${cal.toFixed(2)} µm/div — this seems off (expected ~${exp}). Check your counts!`);
+  }else{
+    toast(`✓ Calibrated ${mag()}×: 1 ocular div = ${cal.toFixed(2)} µm/div`);
+  }
+  updateGuide();
+}
+
+function spawnObject(){
+  const obj=OBJECTS[S.selectedObj];
+  S.trueSize=rand(obj.min,obj.max);
+  // Realistic measurement error: ±5% simulating optical/reading imprecision
+  S.measureError=rand(-.05,.05)*S.trueSize;
+  $('#obj-label').textContent=obj.name;updateGuide();
+}
+
+function doMeasurement(){
+  const cal=S.calibrations[mag()];
+  if(!cal){toast('Calibrate first!');return}
+  const divs=+$('#inp-meas-divs').value;
+  if(!divs||divs<=0){toast('Enter divisions');return}
+  const measured=divs*cal+S.measureError;
+  const accuracy=Math.max(0,100-Math.abs(measured-S.trueSize)/S.trueSize*100);
+  const grade=accuracy>=90?'A':accuracy>=75?'B':accuracy>=60?'C':'D';
+  const result={object:OBJECTS[S.selectedObj].name,magnification:mag()+'×',calValue:cal.toFixed(2),measured:measured.toFixed(1),actual:S.trueSize.toFixed(1),accuracy:accuracy.toFixed(1),grade,time:new Date().toLocaleTimeString()};
+  S.results.push(result);showResultFeedback(result);
+  if(S.mode==='test'&&S.testRunning)advanceTest();
+}
+
+function showResultFeedback(r){
+  const ra=$('#result-area');
+  const color=+r.accuracy>=90?'var(--accent3)':+r.accuracy>=75?'var(--accent)':+r.accuracy>=60?'var(--warn)':'var(--err)';
+  ra.innerHTML=`<div style="background:var(--card);border-radius:10px;padding:10px 14px;margin-top:6px;border-left:3px solid ${color}"><div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center"><span><b style="color:${color}">${r.grade}</b></span><span>Measured: <b>${r.measured} µm</b></span><span>Actual: <b>${r.actual} µm</b></span><span>Accuracy: <b style="color:${color}">${r.accuracy}%</b></span><div class="meter" style="min-width:80px"><div class="meter-fill" style="width:${r.accuracy}%;background:${color}"></div></div></div></div>`;
+  S.score=S.results.reduce((a,x)=>a+ +x.accuracy,0)/S.results.length;
+  $('#score-label').textContent=S.score.toFixed(0)+'%';
+}
+
+function startTest(){
+  if(!Object.keys(S.calibrations).length){toast('Calibrate first!');return}
+  S.testQueue=[];for(let i=0;i<6;i++)S.testQueue.push(Math.floor(Math.random()*OBJECTS.length));
+  S.testIdx=0;S.testRunning=true;S.testTimer=60;S.mode='test';$('#mode-label').textContent='Timed Test';
+  loadTestObject();toast('Test started!');updateModeUI();
+}
+function loadTestObject(){
+  if(S.testIdx>=S.testQueue.length){endTest();return}
+  S.selectedObj=S.testQueue[S.testIdx];S.testTimer=60;
+  const calMags=Object.keys(S.calibrations).map(Number);
+  if(calMags.length){const m=calMags[Math.floor(Math.random()*calMags.length)];S.magIdx=MAGNIFICATIONS.indexOf(m);if(S.magIdx===-1)S.magIdx=0;S.targetAngle=S.magIdx*(Math.PI*2/3);$('#sel-mag').value=S.magIdx;$('#mag-label').textContent=mag()+'×'}
+  spawnObject();$('#sel-obj').value=S.selectedObj;updateGuide();
+}
+function advanceTest(){S.testIdx++;if(S.testIdx>=S.testQueue.length){endTest();return}loadTestObject()}
+function endTest(){
+  S.testRunning=false;
+  const tr=S.results.slice(-S.testQueue.length);
+  const avg=tr.reduce((a,r)=>a+ +r.accuracy,0)/tr.length;
+  toast(`Test done! Avg: ${avg.toFixed(1)}% — ${avg>=90?'A':avg>=75?'B':avg>=60?'C':'D'}`);
+  S.mode='measure';$('#sel-mode').value='measure';updateModeUI();
+}
+
+function generateReportText(){
+  let t='═══════════════════════════════════════\n  MICROMETRY LAB REPORT\n  '+new Date().toLocaleString()+'\n═══════════════════════════════════════\n\nCALIBRATION VALUES:\n';
+  for(const[m,v]of Object.entries(S.calibrations))t+=`  ${m}× → 1 div = ${v.toFixed(2)} µm\n`;
+  t+='\nMEASUREMENTS:\n───────────────────────────────────────\n';
+  S.results.forEach((r,i)=>{t+=`  #${i+1} ${r.object}\n     Mag: ${r.magnification} | Cal: ${r.calValue} µm/div\n     Measured: ${r.measured} µm | Actual: ${r.actual} µm\n     Accuracy: ${r.accuracy}% [${r.grade}] | Time: ${r.time}\n───────────────────────────────────────\n`});
+  if(S.results.length){const avg=S.results.reduce((a,r)=>a+ +r.accuracy,0)/S.results.length;t+=`\nOVERALL: ${avg.toFixed(1)}% — ${avg>=90?'A':avg>=75?'B':avg>=60?'C':'D'}\n`}
+  t+='═══════════════════════════════════════\n  MicroMetry 3D Lab Simulator\n═══════════════════════════════════════\n';return t;
+}
+function showReport(){showModal(`<h2>Lab Report</h2><pre>${generateReportText()}</pre><br><button onclick="document.querySelector('#modal-overlay').classList.remove('active')">Close</button>`)}
+function downloadReport(){const b=new Blob([generateReportText()],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='micrometry_report_'+Date.now()+'.txt';a.click();toast('Downloaded!')}
+
+/* ─── RESIZE ─── */
+function onResize(){
+  const box=container.getBoundingClientRect();
+  camera.aspect=box.width/box.height;camera.updateProjectionMatrix();
+  renderer.setSize(box.width,box.height);resizeEyepiece();
+}
+window.addEventListener('resize',onResize);
+
+/* ─── ANIMATION ─── */
+const clock=new THREE.Clock();
+let lastTestTick=0;
+
+function animate(time){
+  requestAnimationFrame(animate);
+  clock.getDelta();
+
+  // nosepiece rotation
+  S.objectiveAngle=lerp(S.objectiveAngle,S.targetAngle,.05);
+  nosepieceGroup.rotation.y=S.objectiveAngle;
+
+  // idle sway
+  micro.rotation.y=Math.sin(time*.0002)*.006;
+
+  // knob spin visual
+  const coarseRot=S.coarseFocus*.06;
+  coarseKnobL.children[0].rotation.y=coarseRot;
+  coarseKnobR.children[0].rotation.y=coarseRot;
+  const fineRot=S.fineFocus*.08;
+  fineKnobL.children[0].rotation.y=fineRot;
+  fineKnobR.children[0].rotation.y=fineRot;
+
+  // illuminator pulse
+  illuminator.intensity=1.1+Math.sin(time*.003)*.1;
+
+  // test timer
+  if(S.testRunning){
+    if(time-lastTestTick>=1000){S.testTimer=Math.max(0,S.testTimer-1);lastTestTick=time;if(S.testTimer<=0){toast("Time's up!");advanceTest()}}
+    const tb=$('#timer-bar');if(tb)tb.style.width=(S.testTimer/60*100)+'%';
+  }
+
+  orbit.update();
+  renderer.render(scene,camera);
+  drawEyepiece(time);
+}
+
+/* ─── INIT ─── */
+buildControls();
+onResize();
+$('#modal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)hideModal()});
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
